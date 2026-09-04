@@ -1,6 +1,16 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,10 +49,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.engine.RpgGameViewModel
 import com.example.model.GameItem
 import com.example.ui.theme.CoralHp
@@ -68,6 +85,30 @@ fun AlchemyScreen(viewModel: RpgGameViewModel) {
     var selectedItemA by remember { mutableStateOf<GameItem?>(null) }
     var selectedItemB by remember { mutableStateOf<GameItem?>(null) }
 
+    val canFuse = selectedItemA != null && selectedItemB != null && selectedItemA?.id != selectedItemB?.id
+
+    // Swirling alchemy energy animation
+    val infiniteTransition = rememberInfiniteTransition(label = "alchemy_energy")
+    val rotationAngle by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "alchemy_rotation"
+    )
+
+    val pulseGlow by infiniteTransition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "alchemy_pulse"
+    )
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -75,70 +116,128 @@ fun AlchemyScreen(viewModel: RpgGameViewModel) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Alchemical Lab Hero Visual
         item {
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(130.dp),
                 shape = RoundedCornerShape(20.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Image(
+                        painter = painterResource(id = R.drawable.img_alchemy_lab),
+                        contentDescription = "Laboratório de Alquimia",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+
+                    // Dark vignette overlay
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        Color.Black.copy(alpha = 0.3f),
+                                        DarkBg.copy(alpha = 0.9f)
+                                    )
+                                )
+                            )
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(VioletContainer),
-                            contentAlignment = Alignment.Center
+                                .clip(RoundedCornerShape(50))
+                                .background(DarkSurface.copy(alpha = 0.85f))
+                                .border(1.dp, VioletPrimary.copy(alpha = 0.6f), RoundedCornerShape(50))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
                         ) {
                             Icon(
                                 Icons.Default.Science,
-                                contentDescription = "Alquimia",
+                                contentDescription = null,
                                 tint = VioletPrimary,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .rotate(rotationAngle)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "CRÁTERA ALQUÍMICA & FUSÃO",
+                                color = VioletPrimary,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp
                             )
                         }
-                        Spacer(modifier = Modifier.width(10.dp))
+
                         Text(
-                            text = "CRÁTERA ALQUÍMICA & FUSÃO",
-                            color = VioletPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp
+                            text = "Combine dois itens da dungeon para gerar um Item Único que viaja com o herói eternamente!",
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp
                         )
                     }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Text(
-                        text = "Combine dois itens coletados na dungeon para gerar um Item Único com efeitos mistos. Itens únicos se tornam permanentes e viajam com seu personagem para futuras campanhas!",
-                        color = TextSecondary,
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp
-                    )
                 }
             }
         }
 
-        // Transmutation Crucible Slots
+        // Transmutation Crucible Slots with Dynamic Alchemical Animations
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = DarkSurface),
                 shape = RoundedCornerShape(20.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder)
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (canFuse) VioletPrimary.copy(alpha = pulseGlow) else DarkBorder
+                )
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = "RECIPIENTES DE TRANSMUTAÇÃO",
-                        color = VioletPrimary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "RECIPIENTES DE TRANSMUTAÇÃO",
+                            color = VioletPrimary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+
+                        if (canFuse) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = EmeraldSuccess,
+                                    modifier = Modifier
+                                        .size(14.dp)
+                                        .rotate(rotationAngle)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "PRONTO",
+                                    color = EmeraldSuccess,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -151,27 +250,44 @@ fun AlchemyScreen(viewModel: RpgGameViewModel) {
                         AlchemySlotBox(
                             item = selectedItemA,
                             label = "Item Base 1",
+                            pulseAlpha = if (selectedItemA != null) pulseGlow else 1f,
                             onClear = { selectedItemA = null }
                         )
 
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = "Mais",
-                            tint = VioletPrimary,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        // Pulsing Fusion Core Icon
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(if (canFuse) VioletContainer else DarkSurfaceVariant)
+                                .border(
+                                    1.dp,
+                                    if (canFuse) VioletPrimary.copy(alpha = pulseGlow) else DarkOutline,
+                                    CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = "Mais",
+                                tint = if (canFuse) VioletPrimary else TextMuted,
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .scale(if (canFuse) 1.15f else 1f)
+                            )
+                        }
 
                         // Slot B
                         AlchemySlotBox(
                             item = selectedItemB,
                             label = "Item Base 2",
+                            pulseAlpha = if (selectedItemB != null) pulseGlow else 1f,
                             onClear = { selectedItemB = null }
                         )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    val canFuse = selectedItemA != null && selectedItemB != null && selectedItemA?.id != selectedItemB?.id
                     Button(
                         onClick = {
                             if (canFuse) {
@@ -185,21 +301,24 @@ fun AlchemyScreen(viewModel: RpgGameViewModel) {
                             containerColor = VioletContainer,
                             disabledContainerColor = DarkSurfaceVariant
                         ),
-                        shape = RoundedCornerShape(12.dp),
-                        border = if (canFuse) androidx.compose.foundation.BorderStroke(1.dp, VioletBorder) else androidx.compose.foundation.BorderStroke(1.dp, DarkOutline),
+                        shape = RoundedCornerShape(14.dp),
+                        border = if (canFuse) androidx.compose.foundation.BorderStroke(1.dp, VioletPrimary.copy(alpha = pulseGlow)) else androidx.compose.foundation.BorderStroke(1.dp, DarkOutline),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .height(50.dp)
                             .testTag("transmute_button")
                     ) {
                         Icon(
                             Icons.Default.AutoAwesome,
                             contentDescription = "Transmutar",
-                            tint = if (canFuse) VioletPrimary else TextMuted
+                            tint = if (canFuse) VioletPrimary else TextMuted,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .rotate(if (canFuse) rotationAngle else 0f)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Transmutar em Item Único Permanente",
+                            text = if (canFuse) "⚡ Transmutar em Item Único Permanente" else "Selecione 2 Itens para Fusão",
                             color = if (canFuse) VioletPrimary else TextMuted,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
@@ -211,7 +330,10 @@ fun AlchemyScreen(viewModel: RpgGameViewModel) {
 
         // New Crafted Item Celebration Banner
         item {
-            AnimatedVisibility(visible = latestCrafted != null) {
+            AnimatedVisibility(
+                visible = latestCrafted != null,
+                enter = fadeIn() + slideInVertically()
+            ) {
                 latestCrafted?.let { item ->
                     Card(
                         modifier = Modifier
@@ -230,11 +352,12 @@ fun AlchemyScreen(viewModel: RpgGameViewModel) {
                                     Icon(
                                         Icons.Default.AutoAwesome,
                                         contentDescription = "Item Lendário",
-                                        tint = VioletPrimary
+                                        tint = VioletPrimary,
+                                        modifier = Modifier.rotate(rotationAngle)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "ITEM ÚNICO CRIADO!",
+                                        text = "NOVO ITEM ÚNICO CRIADO!",
                                         color = VioletPrimary,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.sp,
@@ -409,6 +532,7 @@ fun AlchemyScreen(viewModel: RpgGameViewModel) {
 fun AlchemySlotBox(
     item: GameItem?,
     label: String,
+    pulseAlpha: Float,
     onClear: () -> Unit
 ) {
     Box(
@@ -418,7 +542,7 @@ fun AlchemySlotBox(
             .background(DarkSurfaceVariant)
             .border(
                 1.dp,
-                if (item != null) VioletPrimary else DarkOutline,
+                if (item != null) VioletPrimary.copy(alpha = pulseAlpha) else DarkOutline,
                 RoundedCornerShape(16.dp)
             )
             .clickable { onClear() }
@@ -427,6 +551,13 @@ fun AlchemySlotBox(
     ) {
         if (item != null) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = VioletPrimary,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.height(3.dp))
                 Text(
                     text = item.name,
                     color = VioletLight,
@@ -436,7 +567,7 @@ fun AlchemySlotBox(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "(Toque p/ remover)",
+                    text = "(Toque p/ trocar)",
                     color = TextMuted,
                     fontSize = 9.sp
                 )
