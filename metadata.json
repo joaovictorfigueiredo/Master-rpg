@@ -1,0 +1,6 @@
+{
+  "name": "AI RPG Master",
+  "description": "RPG com Mestre de IA dinâmico, modos solo e multiplayer em tempo real, sistema de alquimia e masmorras adaptativas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

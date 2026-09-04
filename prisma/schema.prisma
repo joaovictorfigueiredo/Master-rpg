@@ -1,0 +1,347 @@
+// Prisma Schema for AI Game Master RPG Platform
+// Supports Solo and Multiplayer Real-Time Sessions, Adaptive Power Scaling,
+// Permanent vs Common Dungeon Loot, and Custom Alchemy Crafting.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// -------------------------------------------------------------
+// ENUMS
+// -------------------------------------------------------------
+
+enum GameMode {
+  SOLO
+  MULTIPLAYER
+}
+
+enum RoomStatus {
+  LOBBY
+  IN_DUNGEON
+  COMPLETED
+  WIPED
+  ABANDONED
+}
+
+enum CharacterClass {
+  WARRIOR
+  MAGE
+  ROGUE
+  CLERIC
+  ALCHEMIST
+}
+
+enum ItemRarity {
+  COMMON
+  UNCOMMON
+  RARE
+  EPIC
+  LEGENDARY
+  MYTHIC
+}
+
+enum ItemType {
+  WEAPON
+  SHIELD
+  ARMOR
+  CONSUMABLE
+  CATALYST
+  RELIC
+  SCROLL
+}
+
+enum ActionType {
+  ATTACK
+  CAST_SPELL
+  USE_ITEM
+  ALCHEMY_COMBINE
+  EXPLORE
+  INVESTIGATE
+  FLEE
+  DEFEND
+}
+
+enum DungeonDifficulty {
+  ADAPTIVE
+  APPRENTICE
+  HEROIC
+  NIGHTMARE
+}
+
+// -------------------------------------------------------------
+// CORE ENTITIES
+// -------------------------------------------------------------
+
+model User {
+  id            String      @id @default(uuid())
+  email         String      @unique
+  username      String      @unique
+  passwordHash  String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  characters    Character[]
+  hostedRooms   GameRoom[]  @relation("RoomHost")
+
+  @@index([email])
+  @@index([username])
+}
+
+model Character {
+  id             String          @id @default(uuid())
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name           String
+  characterClass CharacterClass
+  level          Int             @default(1)
+  experience     Int             @default(0)
+  
+  // Vital Stats
+  currentHp      Int             @default(100)
+  maxHp          Int             @default(100)
+  currentMana    Int             @default(50)
+  maxMana        Int             @default(50)
+  
+  // Base RPG Attributes
+  strength       Int             @default(10)
+  dexterity      Int             @default(10)
+  intelligence   Int             @default(10)
+  vitality       Int             @default(10)
+  charisma       Int             @default(10)
+  
+  // Dynamic metrics
+  powerLevel     Int             @default(50) // Calculated from stats, level and unique items
+  gold           Int             @default(0)
+  isAlive        Boolean         @default(true)
+  
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  // Relationships
+  inventory          InventoryItem[]
+  spells             CharacterSpell[]
+  roomParticipations RoomParticipant[]
+  turnActions        GameTurn[]       @relation("TurnActiveActor")
+  alchemyLogs        AlchemyRecipeLog[]
+
+  @@index([userId])
+  @@index([powerLevel])
+}
+
+model Spell {
+  id             String           @id @default(uuid())
+  name           String           @unique
+  description    String
+  manaCost       Int
+  cooldownTurns  Int              @default(0)
+  damageType     String           // "FIRE", "HOLY", "ARCANE", "POISON", etc.
+  basePower      Int
+  requiredLevel  Int              @default(1)
+  
+  characters     CharacterSpell[]
+}
+
+model CharacterSpell {
+  characterId    String
+  character      Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  spellId        String
+  spell          Spell     @relation(fields: [spellId], references: [id], onDelete: Cascade)
+  
+  learnedAt      DateTime  @default(now())
+  masteryLevel   Int       @default(1)
+
+  @@id([characterId, spellId])
+}
+
+model ItemTemplate {
+  id             String          @id @default(uuid())
+  code           String          @unique // e.g. "IRON_DAGGER", "MINOR_HEALING_POTION"
+  name           String
+  description    String
+  itemType       ItemType
+  rarity         ItemRarity      @default(COMMON)
+  baseDamage     Int             @default(0)
+  baseArmor      Int             @default(0)
+  baseHeal       Int             @default(0)
+  value          Int             @default(10)
+  canBeCombined  Boolean         @default(true)
+  isConsumable   Boolean         @default(false)
+  
+  instances      InventoryItem[]
+}
+
+model InventoryItem {
+  id                   String        @id @default(uuid())
+  characterId          String
+  character            Character     @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  
+  itemTemplateId       String
+  template             ItemTemplate  @relation(fields: [itemTemplateId], references: [id])
+  
+  // Custom Attributes for Unique / Synthesized Items
+  customName           String?       // E.g., "Healing Blood Dagger"
+  customDescription    String?       // Narrative summary of mixed magical effects
+  
+  // Core Business Rule Flags
+  isPermanent          Boolean       @default(false) // If true, survives dungeon exit/wipe
+  isCommonDungeonItem  Boolean       @default(true)  // If true & not unique, lost on death/abandon
+  isUniqueItem         Boolean       @default(false) // Alchemically crafted or legendary artifact
+  
+  // Alchemy Lineage tracking
+  // JSON array storing recipe origin: [{ itemId: "IRON_DAGGER", name: "Dagger" }, { itemId: "HEAL_POT", name: "Potion" }]
+  alchemyLineage       Json?
+  
+  // Custom bonus stats generated by AI (e.g. { "healOnHit": 15, "bleedChance": 0.2 })
+  bonusModifiers       Json?
+  
+  quantity             Int           @default(1)
+  durability           Int           @default(100)
+  
+  // Dungeon context in which this was acquired
+  acquiredInDungeonId  String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@index([characterId])
+  @@index([isUniqueItem])
+  @@index([isPermanent])
+}
+
+// -------------------------------------------------------------
+// GAME ROOM & REAL-TIME SESSIONS
+// -------------------------------------------------------------
+
+model GameRoom {
+  id                 String             @id @default(uuid())
+  roomCode           String             @unique // 6-digit room code for friends to join
+  hostUserId         String
+  hostUser           User               @relation("RoomHost", fields: [hostUserId], references: [id])
+  
+  mode               GameMode           @default(SOLO)
+  status             RoomStatus         @default(LOBBY)
+  difficulty         DungeonDifficulty  @default(ADAPTIVE)
+  
+  currentFloor       Int                @default(1)
+  dungeonSeed        String             // Procedural seed for consistent dungeon generation
+  calculatedPartyCR  Float              @default(1.0) // Challenge Rating scaled to party
+  
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  participants       RoomParticipant[]
+  dungeonSessions    DungeonSession[]
+  turns              GameTurn[]
+
+  @@index([roomCode])
+  @@index([status])
+}
+
+model RoomParticipant {
+  id             String     @id @default(uuid())
+  roomId         String
+  room           GameRoom   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  
+  characterId    String
+  character      Character  @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  
+  isHost         Boolean    @default(false)
+  isReady        Boolean    @default(false)
+  
+  // Ephemeral in-session stats (synced with Character upon successful clear)
+  sessionHp      Int
+  sessionMana    Int
+  isActive       Boolean    @default(true)
+  isDead         Boolean    @default(false)
+  
+  joinedAt       DateTime   @default(now())
+
+  @@unique([roomId, characterId])
+  @@index([roomId])
+  @@index([characterId])
+}
+
+model DungeonSession {
+  id                     String     @id @default(uuid())
+  roomId                 String
+  room                   GameRoom   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  
+  floorNumber            Int
+  currentRoomTitle       String     // e.g., "The Whispering Crypt of Morvath"
+  environmentNarration   String     // Atmosphere, hazards, lighting
+  
+  // Scaled AI parameters
+  activeMonsters         Json       // [{ name: "Shadow Ghoul", hp: 45, attack: 12, cr: 1.5 }]
+  roomLoot               Json       // [{ id: "IRON_DAGGER", name: "Iron Dagger", common: true }]
+  isBossEncounter        Boolean    @default(false)
+  isCleared              Boolean    @default(false)
+  
+  createdAt              DateTime   @default(now())
+  clearedAt              DateTime?
+
+  turns                  GameTurn[]
+
+  @@index([roomId])
+}
+
+model GameTurn {
+  id                      String          @id @default(uuid())
+  roomId                  String
+  room                    GameRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  
+  dungeonSessionId        String
+  dungeonSession          DungeonSession  @relation(fields: [dungeonSessionId], references: [id], onDelete: Cascade)
+  
+  turnNumber              Int
+  activeCharacterId       String
+  activeCharacter         Character       @relation("TurnActiveActor", fields: [activeCharacterId], references: [id])
+  
+  // Player Action
+  playerActionText        String          // Raw action text or speech-to-text transcript
+  actionType              ActionType
+  targetEntity            String?         // Name or ID of target monster/item/door
+  
+  // D20 Mechanics evaluated by AI or backend
+  d20Roll                 Int             // 1 to 20
+  modifier                Int             // Stat bonus applied
+  totalScore              Int             // d20 + modifier
+  difficultyClass         Int             // DC set by AI according to encounter level
+  isCriticalSuccess       Boolean         @default(false)
+  isCriticalFailure       Boolean         @default(false)
+  
+  // AI Game Master Output (Structured)
+  gmNarration             String          // Vivid storytelling result
+  outcomeSummary          String          // Short tactical feedback
+  partyHpDeltas           Json            // { "char-uuid-1": -14, "char-uuid-2": +20 }
+  partyManaDeltas         Json            // { "char-uuid-1": -10 }
+  inventoryChanges        Json            // { "added": [...], "removed": [...], "crafted": [...] }
+  suggestedNextActions    Json            // ["Attack with Dagger", "Cast Shield", "Drink Potion"]
+  
+  timestamp               DateTime        @default(now())
+
+  @@index([roomId, turnNumber])
+}
+
+model AlchemyRecipeLog {
+  id                    String     @id @default(uuid())
+  characterId           String
+  character             Character  @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  
+  sourceItem1Name       String
+  sourceItem2Name       String
+  catalystUsed          String?
+  
+  resultingItemName     String
+  resultingItemEffects  Json
+  aiGeneratedFlavor     String
+  
+  wasSuccess            Boolean    @default(true)
+  createdAt             DateTime   @default(now())
+
+  @@index([characterId])
+}

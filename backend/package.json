@@ -1,0 +1,43 @@
+{
+  "name": "ai-rpg-master-backend",
+  "version": "1.0.0",
+  "description": "NestJS & Socket.io Real-Time Game Master Backend with Gemini AI Structured Outputs",
+  "author": "AI RPG Studio",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "nest build",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
+    "start:prod": "node dist/main",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@google/genai": "^0.1.2",
+    "@nestjs/common": "^10.4.0",
+    "@nestjs/config": "^3.2.3",
+    "@nestjs/core": "^10.4.0",
+    "@nestjs/platform-express": "^10.4.0",
+    "@nestjs/platform-socket.io": "^10.4.0",
+    "@nestjs/websockets": "^10.4.0",
+    "@prisma/client": "^5.19.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "dotenv": "^16.4.5",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.4.0",
+    "@nestjs/schematics": "^10.4.0",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.0",
+    "@types/socket.io": "^3.0.2",
+    "prisma": "^5.19.0",
+    "typescript": "^5.5.0"
+  }
+}
